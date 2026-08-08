@@ -105,10 +105,16 @@ In your actual project repository, create a `Jenkinsfile` that pulls in the shar
 pipeline {
     agent any
 
+    parameters {
+        string(name: 'REPO_URL', defaultValue: 'https://github.com/your-username/your-app.git', description: 'Git repository to build')
+        string(name: 'REPO_BRANCH', defaultValue: 'main', description: 'Branch to checkout')
+        string(name: 'IMAGE_NAME', defaultValue: 'your-app', description: 'Docker image name')
+    }
+
     stages {
         stage('Checkout') {
             steps {
-                gitCheckout('https://github.com/your-username/your-app.git', 'main')
+                gitCheckout(params.REPO_URL, params.REPO_BRANCH)
             }
         }
         stage('Build') {
@@ -118,12 +124,12 @@ pipeline {
         }
         stage('Docker Build') {
             steps {
-                dockerBuildImage('your-app', "${env.BUILD_NUMBER}")
+                dockerBuildImage(params.IMAGE_NAME, "${env.BUILD_NUMBER}")
             }
         }
         stage('Docker Push') {
             steps {
-                dockerPushImage('your-app', "${env.BUILD_NUMBER}")
+                dockerPushImage(params.IMAGE_NAME, "${env.BUILD_NUMBER}")
             }
         }
     }
@@ -132,7 +138,6 @@ pipeline {
 
 > The `@Library('jenkins-shared-library') _` line at the top tells Jenkins to load the library you configured in Step 3. The underscore `_` is required syntax when you're not importing a specific class.
 
-<img src="screenshots/jenkinsfile-with-library-annotation.png" />
 
 ### Step 5: Prove It Works Across Multiple Projects
 
