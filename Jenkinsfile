@@ -3,16 +3,16 @@
 pipeline {
     agent any
 
-    environment {
-        REPO_URL   = 'https://github.com/your-username/your-app.git'
-        REPO_BRANCH = 'main'
-        IMAGE_NAME = 'your-app'
+    parameters {
+        string(name: 'REPO_URL', defaultValue: 'https://github.com/your-username/your-app.git', description: 'Git repository to build')
+        string(name: 'REPO_BRANCH', defaultValue: 'main', description: 'Branch to checkout')
+        string(name: 'IMAGE_NAME', defaultValue: 'your-app', description: 'Docker image name')
     }
 
     stages {
         stage('Checkout') {
             steps {
-                gitCheckout(env.REPO_URL, env.REPO_BRANCH)
+                gitCheckout(params.REPO_URL, params.REPO_BRANCH)
             }
         }
         stage('Build') {
@@ -22,12 +22,12 @@ pipeline {
         }
         stage('Docker Build') {
             steps {
-                dockerBuildImage(env.IMAGE_NAME, "${env.BUILD_NUMBER}")
+                dockerBuildImage(params.IMAGE_NAME, "${env.BUILD_NUMBER}")
             }
         }
         stage('Docker Push') {
             steps {
-                dockerPushImage(env.IMAGE_NAME, "${env.BUILD_NUMBER}")
+                dockerPushImage(params.IMAGE_NAME, "${env.BUILD_NUMBER}")
             }
         }
     }
