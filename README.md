@@ -219,21 +219,24 @@ To demonstrate reusability, use the **same shared library** in a second, differe
 <img src="screenshots/ecr-image-upload-from-jenkins.png" />
 
 ---
-
-## Task 2: Parameterised Pipelines for Multi-Environment Deployments
-
-### Why Parameters?
-
-Instead of creating four separate Jenkinsfiles (`Jenkinsfile-dev`, `Jenkinsfile-qa`, `Jenkinsfile-staging`, `Jenkinsfile-prod`), you can create **one** Jenkinsfile and let the user pick the target environment at build time using a dropdown parameter.
-
-### Step 1: Add a Choice Parameter
-
-Add a `parameters` block to your pipeline with an `Environment` choice parameter:
-
+ 
+## Task 2: Parameterised Pipeline for Multi-Environment Deployments
+ 
+This is implemented in **repo2**'s `Jenkinsfile`, on top of the shared library setup above.
+ 
+### Step 1 — Add the `parameters` block
+ 
 ```groovy
+@Library('jenkins-shared-library') _
+ 
 pipeline {
     agent any
-
+ 
+    environment {
+        AWS_ACCOUNT_ID = credentials('aws-account-id')
+        AWS_REGION     = 'ap-south-1'
+    }
+ 
     parameters {
         choice(
             name: 'ENVIRONMENT',
@@ -241,60 +244,80 @@ pipeline {
             description: 'Select the environment to deploy to'
         )
     }
-
+ 
     stages {
-        stage('Show Selected Environment') {
+        stage('Show Parameters') {
             steps {
-                echo "Deploying to environment: ${params.ENVIRONMENT}"
+                echo "Selected Environment: ${params.ENVIRONMENT}"
+            }
+        }
+        stage('Checkout') {
+            steps {
+                gitCheckout(env.GIT_URL)
+            }
+        }
+        stage('Build') {
+            steps {
+                mavenBuild()
+            }
+        }
+        stage('Docker Build') {
+            steps {
+                dockerBuild('maven-app', "${params.ENVIRONMENT.toLowerCase()}")
+            }
+        }
+        stage('Docker Push') {
+            steps {
+                dockerPush('maven-app', "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/maven-app", "${params.ENVIRONMENT.toLowerCase()}")
             }
         }
         stage('Deploy') {
             steps {
-                script {
-                    echo "Running deployment steps for ${params.ENVIRONMENT}..."
-                    // Add environment-specific deployment logic here
-                }
+                echo "Deploying maven-app to ${params.ENVIRONMENT} environment..."
             }
         }
     }
 }
 ```
+ 
+- `choice()` creates the environment dropdown with the 4 options.
+- `params.ENVIRONMENT` reads the selected value anywhere in the pipeline.
+- The **Show Parameters** stage prints the selection directly to console output.
 
-### Step 2: Run the Pipeline and Select a Parameter
+<img src="screenshots/task2-jenkins-parameter-configure.png" />
 
-1. Go to your pipeline job in Jenkins.
-2. Click **Build with Parameters** (this option appears automatically once a `parameters` block exists).
-3. Select an environment from the **ENVIRONMENT** dropdown (e.g., `QA`).
-4. Click **Build**.
+### Step 2 — First-run behaviour
+ 
+On the very first run of a new pipeline job, Jenkins doesn't yet know about the `parameters` block, so it runs once with no parameters shown. After that first scan, the job page shows **Build with Parameters**, and every subsequent run lets you pick the environment from the dropdown.
+ 
+*The "Build with Parameters" screen showing the ENVIRONMENT choice dropdown (Dev/QA/Staging/Production).*
 
-<img src="screenshots/build-with-parameters-dropdown.png" />
+<img src="screenshots/task2-build-with-parameters-dropdown.png"/>
 
-### Step 3: Verify the Console Output
+### Step 3 — Verify parameter output in console
+ 
+After triggering a build with a chosen environment (e.g. `QA`), the console output confirms the selection and carries it through the Docker build/push stages (e.g. image tagged `qa`).
+ 
+*Jenkins console log showing "Selected Environment: Production" and the environment-tagged Docker image build/push.*
 
-Open the build's **Console Output**. You should see the selected environment printed clearly, confirming the parameter was passed correctly into the pipeline.
+<img src="screenshots/task2-console-output-selected-environment.png"/>
 
-<img src="screenshots/console-output-selected-environment.png" />
+*Image pushes to ECR with tag selected environment (here Production).*
+
+<img src="screenshots/task2-output-image-push-ecr.png"/>
 
 ---
-
-## Project Structure
-
+ 
+## 🧰 Maven App
+ 
+A minimal Maven project generated with:
+ 
+```bash
+mvn archetype:generate
 ```
-.
-├── jenkins-shared-library/        # Shared library repo (Task 1)
-│   └── vars/
-│       ├── gitCheckout.groovy
-│       ├── mavenBuild.groovy
-│       ├── dockerBuildImage.groovy
-│       └── dockerPushImage.groovy
-├── project-a/
-│   └── Jenkinsfile                # Uses shared library
-├── project-b/
-│   └── Jenkinsfile                # Also uses shared library (proves reusability)
-└── parameterised-pipeline/
-    └── Jenkinsfile                # Task 2 — multi-environment deployment
-```
-
+ 
+Kept intentionally simple (a basic `mvn clean package` build) so the focus of this lab stays on the shared library and pipeline parameterisation, not the Java application itself.
+ 
 ---
 
 ## Key Takeaways
