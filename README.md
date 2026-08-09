@@ -329,7 +329,9 @@ Kept intentionally simple (a basic `mvn clean package` build) so the focus of th
 
 ---
 
-## Notes
+## Author
 
-- Replace all placeholder repo URLs (`https://github.com/your-username/...`) with your actual repository links.
-- Screenshot filenames above are placeholders — replace them with your actual captured screenshots, keeping the same filenames or updating the `<img src="">` paths accordingly.
+**Sinsha C**
+
+[![GitHub](https://img.shields.io/badge/GitHub-sinsha--c-181717?style=flat&logo=github&logoColor=white)](https://github.com/sinsha-c)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-sinshac-0A66C2?style=flat&logo=linkedin&logoColor=white)](https://linkedin.com/in/sinshac)
