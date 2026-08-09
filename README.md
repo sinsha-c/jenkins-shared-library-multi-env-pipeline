@@ -7,6 +7,20 @@ This project is a hands-on lab that covers two common real-world Jenkins skills:
 
 ---
 
+## Architecture
+ 
+```
+jenkins-shared-library (repo1)
+        │
+        │  @Library('jenkins-shared-library') _
+        ▼
+jenkins-shared-library-multi-env-pipeline (repo2)
+        ├── Jenkinsfile   (calls the shared library steps)
+        └── maven-app/    (generated via mvn archetype:generate)
+```
+ 
+---
+
 ## Prerequisites
 
 Before starting, make sure you have:
@@ -15,8 +29,18 @@ Before starting, make sure you have:
 - A GitHub account (to host the shared library and sample project repos)
 - Docker installed on the Jenkins agent/node (for the build/push steps)
 - Basic familiarity with Git and Jenkins pipeline syntax (helpful but not required)
+- Create ECR repo in the region you have selected.
 
 ---
+
+## Repositories
+ 
+| Repo | Purpose |
+|---|---|
+| [`jenkins-shared-library`](https://github.com/sinsha-c/jenkins-shared-library) | The reusable shared library (repo1) |
+| [`jenkins-shared-library-multi-env-pipeline`](https://github.com/sinsha-c/jenkins-shared-library-multi-env-pipeline) | Consumer pipeline + simple Maven app (repo2) |
+
+
 
 ## Task 1: Reusable Jenkins Shared Library
 
@@ -45,40 +69,48 @@ jenkins-shared-library/
 ### Step 2: Write the Reusable Functions
 
 Each file in `vars/` defines one reusable step. Here are simple examples:
-
-**`vars/gitCheckout.groovy`** — reusable Git checkout step
-
+ 
+**`vars/gitCheckout.groovy`**
 ```groovy
 def call(String repoUrl, String branch = 'main') {
+    echo "Checking out ${branch} from ${repoUrl}"
     git branch: branch, url: repoUrl
 }
 ```
-
-**`vars/mavenBuild.groovy`** — reusable Maven build step
-
+ 
+**`vars/mavenBuild.groovy`** (kept simple for a beginner)
 ```groovy
 def call() {
+    echo "Building Maven project..."
     sh 'mvn clean package'
 }
 ```
-
-**`vars/dockerBuildImage.groovy`** — reusable Docker image build step
-
+ 
+**`vars/dockerBuildImage.groovy`**
 ```groovy
-def call(String imageName, String tag = 'latest') {
-    sh "docker build -t ${imageName}:${tag} ."
+def call(String imageName, String imageTag = 'latest') {
+    echo "Building Docker image: ${imageName}:${imageTag}"
+    sh "docker build -t ${imageName}:${imageTag} ."
+}
+```
+`imageName` (e.g. `'maven-app'`) is just the **local** name Docker gives the image on the Jenkins agent — it doesn't need to match anything in ECR yet. That happens in the push step below.
+ 
+**`vars/dockerPushImage.groovy`**
+```groovy
+def call(String localImageName, String ecrRepoUrl, String imageTag = 'latest', String awsRegion = 'ap-south-1') {
+    echo "Pushing Docker image to ECR: ${ecrRepoUrl}:${imageTag}"
+    sh """
+        aws ecr get-login-password --region ${awsRegion} | docker login --username AWS --password-stdin ${ecrRepoUrl}
+        docker tag ${localImageName}:${imageTag} ${ecrRepoUrl}:${imageTag}
+        docker push ${ecrRepoUrl}:${imageTag}
+    """
 }
 ```
 
-**`vars/dockerPushImage.groovy`** — reusable Docker image push step
+`localImageName` must match the `imageName` used in `dockerBuild()` — that's the image `docker tag` retags (renames) to the full ECR repo URL before pushing, since ECR only accepts images pushed under its own repo URL.
+> Uses the AWS CLI already configured on the Jenkins agent (or an IAM instance role) to authenticate to ECR — no separate Jenkins credentials needed, just AWS permissions for `ecr:GetAuthorizationToken`, `ecr:BatchCheckLayerAvailability`, and `ecr:PutImage`.
 
-```groovy
-def call(String imageName, String tag = 'latest') {
-    sh "docker push ${imageName}:${tag}"
-}
-```
-
-Commit and push these files to your `jenkins-shared-library` repository.
+Commit and push these files to your **repo1** `jenkins-shared-library` repository.
 
 <img src="screenshots/shared-library-groovy-files.png" />
 
@@ -95,6 +127,8 @@ Commit and push these files to your `jenkins-shared-library` repository.
 
 <img src="screenshots/global-pipeline-libraries-config.png" />
 
+### Step 4: Generate a basic Maven application
+
 Inside your ec2-unbuntu create a folder and you can generate a basic Maven application with:
 
 ```bash
@@ -106,12 +140,12 @@ mvn archetype:generate \
   -DinteractiveMode=false
 ```
 
-Then move the generated pom.xml and src into the repository root if needed.
+Then move the generated pom.xml and src into the repository 2 root if needed.
 
 
-### Step 4: Use the Library in a Jenkinsfile
+### Step 5: Use the Library in a Jenkinsfile
 
-In your actual project repository, create a `Jenkinsfile` that pulls in the shared library with `@Library` and calls the reusable functions:
+In your actual project repository (here repo2), create a `Jenkinsfile` that pulls in the shared library with `@Library` and calls the reusable functions:
 
 ```groovy
 @Library('jenkins-shared-library') _
@@ -119,16 +153,15 @@ In your actual project repository, create a `Jenkinsfile` that pulls in the shar
 pipeline {
     agent any
 
-    parameters {
-        string(name: 'REPO_URL', defaultValue: 'https://github.com/your-username/your-app.git', description: 'Git repository to build')
-        string(name: 'REPO_BRANCH', defaultValue: 'main', description: 'Branch to checkout')
-        string(name: 'IMAGE_NAME', defaultValue: 'your-app', description: 'Docker image name')
+    environment {
+        AWS_ACCOUNT_ID = credentials('aws-account-id')
+        AWS_REGION     = 'ap-south-1'
     }
 
     stages {
         stage('Checkout') {
             steps {
-                gitCheckout(params.REPO_URL, params.REPO_BRANCH)
+                gitCheckout(env.GIT_URL)
             }
         }
         stage('Build') {
@@ -138,12 +171,12 @@ pipeline {
         }
         stage('Docker Build') {
             steps {
-                dockerBuildImage(params.IMAGE_NAME, "${env.BUILD_NUMBER}")
+                dockerBuildImage('maven-app', "v${BUILD_NUMBER}")
             }
         }
         stage('Docker Push') {
             steps {
-                dockerPushImage(params.IMAGE_NAME, "${env.BUILD_NUMBER}")
+                dockerPushImage("${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/maven-app", "v${BUILD_NUMBER}")
             }
         }
     }
@@ -151,13 +184,39 @@ pipeline {
 ```
 
 > The `@Library('jenkins-shared-library') _` line at the top tells Jenkins to load the library you configured in Step 3. The underscore `_` is required syntax when you're not importing a specific class.
+> `AWS_ACCOUNT_ID` is pulled from a Jenkins **Secret text** credential (ID `aws-account-id`) instead of being hardcoded — set this up under **Manage Jenkins → Credentials** before running the pipeline. 
+> <img src="screenshots/account-id-saved-in-jenkins-secret.png" />
+
+> Also make sure an ECR repository named `maven-app` already exists in the configured region.
+> <img src="screenshots/ecr-repo-created.png" />
+
+>  `BUILD_NUMBER` is another Jenkins built-in variable — it auto-increments on every run (1, 2, 3…), so each build produces a uniquely tagged image (`v1`, `v2`, `v3`…) instead of overwriting the same `v1` tag every time.
+
+### Step 6: Create Dockerfile 
+
+**Does `dockerBuild()` need a Dockerfile?** Yes — `docker build -t ... .` (the `.` means "build context = current directory") always looks for a file literally named `Dockerfile` in that directory. It's not generated by `mvn archetype:generate`, so a simple one needs to be added manually to the `maven-app/` 
+folder.
+
+```dockerfile
+FROM eclipse-temurin:17-jre
+COPY target/*.jar app.jar
+ENTRYPOINT ["java", "-jar", "app.jar"]
+```
+
+This copies the `.jar` produced by `mavenBuild()`'s `mvn clean package` step into the image — keep it this simple since the focus of the lab is the pipeline, not the app. Commit the Dockerfile to repo2.
 
 
-### Step 5: Prove It Works Across Multiple Projects
+### Step 7: Prove It Works Across Multiple Projects
 
 To demonstrate reusability, use the **same shared library** in a second, different project repository — just repeat Step 4 with a different `Jenkinsfile` (pointing to a different app repo). Both pipelines should build successfully, calling the exact same underlying functions without any duplicated code.
 
-<img src="screenshots/multiple-pipelines-using-shared-library.png" />
+*Jenkins console output showing the pipeline running through Checkout → Build → Docker Build → Docker Push stages using the shared library steps, ending in `Finished: SUCCESS`.*
+
+<img src="screenshots/jenkins-success-build-log.png" />
+<img src="screenshots/jenkins-success-build.png" />
+
+*ECR repository — pushed image*
+<img src="screenshots/ecr-image-upload-from-jenkins.png" />
 
 ---
 
