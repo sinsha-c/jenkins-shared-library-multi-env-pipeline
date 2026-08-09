@@ -26,7 +26,7 @@ pipeline {
         }
         stage('Docker Push') {
             steps {
-                dockerPush('maven-app', "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/maven-app", "v${BUILD_NUMBER}")
+                dockerPushImage('maven-app', "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/maven-app", "v${BUILD_NUMBER}")
             }
         }
     }
