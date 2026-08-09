@@ -129,7 +129,7 @@ Commit and push these files to your **repo1** `jenkins-shared-library` repositor
 
 ### Step 4: Generate a basic Maven application
 
-Inside your ec2-unbuntu create a folder and you can generate a basic Maven application with:
+Inside your ec2-unbuntu create a folder and you can generate a basic Maven application with below commands:
 
 ```bash
 mvn archetype:generate \
@@ -140,7 +140,7 @@ mvn archetype:generate \
   -DinteractiveMode=false
 ```
 
-Then move the generated pom.xml and src into the repository 2 root if needed.
+Then move the generated pom.xml and src into the repository 2 root folder.
 
 
 ### Step 5: Use the Library in a Jenkinsfile
@@ -308,7 +308,7 @@ After triggering a build with a chosen environment (e.g. `QA`), the console outp
 
 ---
  
-## 🧰 Maven App
+## Maven App
  
 A minimal Maven project generated with:
  
