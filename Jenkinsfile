@@ -34,12 +34,12 @@ pipeline {
         }
         stage('Docker Build') {
             steps {
-                dockerBuild('maven-app', "${params.ENVIRONMENT.toLowerCase()}")
+                dockerBuildImage('maven-app', "${params.ENVIRONMENT.toLowerCase()}")
             }
         }
         stage('Docker Push') {
             steps {
-                dockerPush('maven-app', "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/maven-app", "${params.ENVIRONMENT.toLowerCase()}")
+                dockerPushImage('maven-app', "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/maven-app", "${params.ENVIRONMENT.toLowerCase()}")
             }
         }
         stage('Deploy') {
