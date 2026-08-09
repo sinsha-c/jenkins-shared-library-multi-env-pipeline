@@ -95,6 +95,20 @@ Commit and push these files to your `jenkins-shared-library` repository.
 
 <img src="screenshots/global-pipeline-libraries-config.png" />
 
+Inside your ec2-unbuntu create a folder and you can generate a basic Maven application with:
+
+```bash
+mvn archetype:generate \
+  -DgroupId=com.example \
+  -DartifactId=demo-app \
+  -DarchetypeArtifactId=maven-archetype-quickstart \
+  -DarchetypeVersion=1.5 \
+  -DinteractiveMode=false
+```
+
+Then move the generated pom.xml and src into the repository root if needed.
+
+
 ### Step 4: Use the Library in a Jenkinsfile
 
 In your actual project repository, create a `Jenkinsfile` that pulls in the shared library with `@Library` and calls the reusable functions:
